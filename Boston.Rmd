@@ -1,0 +1,600 @@
+---
+title: "Predicting the Price of Boston Housing"
+author: "Akalu Desta Teklu $ Krishnaraaj Vellakinar"
+date: "2022-12-28"
+output: html_document
+---
+# Abstract
+
+This project focuses on predicting the price of Boston housing based on the input and output features present in the Boston housing data set using regression approach. The Boston housing data which contains 506 samples (rows) and 14 feature variables (columns), that is; 13 input variables and one target variable is used for this analysis.The overall project work has been started with importing the Boston housing data to RStudio, then data cleansing, Summary statistics of the variables and finding correlation between variables, Exploratory data analysis using visualization has been done. After that data has split-ed into 80/20 training and testing data set, as well as data normalization, transformation and feature selection has carried out. Fitting various models such as linear regression, generalized linear regression, random forest and boosting gradient using different variable selections and finding the best model of these.
+
+The data has following features, medv being the target (dependent) variable:
+
+1.crim - per capita crime rate by town
+
+2.zn   - proportion of residential land zoned for lots over 25,000 sq.ft
+
+3.indus - proportion of non-retail business acres per town
+
+4.chas - Charles River dummy variable (= 1 if tract bounds river; 0 otherwise)
+
+5.nox - nitric oxides concentration (parts per 10 million)
+
+6.rm  - average number of rooms per dwelling
+
+7.age - proportion of owner-occupied units built prior to 1940
+
+8.dis - weighted distances to five Boston employment centres
+
+9.rad - index of accessibility to radial highways
+
+10.tax - full-value property-tax rate per USD 10,000
+
+11.ptratio- pupil-teacher ratio by town
+
+12.B-1000(Bk - 0.63)^ 2 where Bk is the proportion of blacks by town
+
+13.lstat - percentage of lower status of the population
+
+14.medv  - median value of owner-occupied homes in USD 1000’s
+
+This project has realized in step-by-step design procedure as follows:
+
+## 1.Loading the Boston Housing dataset
+
+The dataset is available in the mlbench package and loaded as follows
+
+```{r}
+#Loading the all required packages
+library(neuralnet)
+library(mlbench)
+library("dplyr")
+library(tidyverse)
+library(caret)
+library(lattice)
+library(corrplot)
+library(ggplot2)
+library(randomForest)
+
+#attach the boston housing data set
+
+data(BostonHousing)
+dataset<-BostonHousing
+View(dataset)
+```
+
+## 2.Data preparation
+
+This step is about preparing the data in such a way that it best exposes the structure of the problem and the relationships between your input attributes with the output variable.
+
+### 2.1. Checking missing values and cleaning the data
+
+```{r}
+#Checking the number of missing value(NA)
+numberOfNA <- length(which(is.na(dataset)==TRUE))
+if(numberOfNA>0) {
+  dataset <- housing[complete.cases(dataset),]
+}
+
+sum(complete.cases(dataset))
+```
+
+However, there are no missing values in this dataset as shown below.
+
+### 2.2. Descriptive statistics
+
+```{r}
+#Structure of the dataset
+str(dataset)
+```
+```{r}
+#Showing the dimension of the data set
+dim(dataset)
+```
+```{r}
+#Listing the first six rows of the dataset
+head(dataset)
+```
+```{r}
+#List the types of each attributes
+sapply(dataset, class)
+```
+
+We can see that one of the attributes (chas) is a factor while all of the others are numeric. so the input variable (chas) needs transformation.
+
+```{r}
+# summarize attribute distributions
+summary(dataset)
+```
+
+NB: Here we can see that variable 'crim' and 'black' take wide range of values. Variables 'crim', 'zn', 'rm' and 'black' have a large difference between their median and mean which indicates lot of outliers in respective variables. Moreover, we  can also note that 'chas' is a pretty unbalanced factor. We could transform this attribute to numeric to make calculating descriptive statistics and plots easier as shown below.
+
+```{r}
+
+#Converting the "chas" factor attribute into numeric one.
+
+dataset[,4]<-as.character(dataset[,4])   ##factor converts to character
+dataset[,4]<-as.numeric(dataset[,4])     ##Then from character to numeric
+summary(dataset)
+```
+
+Then if we look now at summary of the dataset of 'chas' feature it becomes balanced and transformed into numeric so that we can manipulate the data as we wish.
+
+## 3. Exploratory Data Analysis
+
+Exploratory Data Analysis is a very important step before training the model. In this section, we will use some visualizations to understand the relationship of the target variable with other features as well as the correlation between the each input attributes.
+
+```{r}
+
+#Correlation between input variables
+cor(dataset[,1:13])
+```
+
+We can see that many of the attributes have a strong correlation. These  collinearity between features need to be removed for better regression accuracy. 
+
+### 3.1 Uni modal Data Visualization
+
+Let’s look at visualizations of individual input attributes.
+
+```{r}
+# histograms each attribute
+par(mfrow=c(2,7))
+for(i in 1:13) {
+hist(dataset[,i], main=names(dataset)[i])
+}
+```
+
+We can see that some attributes may have an exponential distribution, such as "crim, zn, ange and b". We can see that others may have a bimodal distribution such as rad and tax.
+
+```{r}
+
+# density plot for each attribute
+par(mfrow=c(2,7))
+for(i in 1:13) {
+plot(density(dataset[,i]), main=names(dataset)[i])
+}
+```
+
+This perhaps adds more evidence to our suspicion about possible exponential and bimodal distributions. It also looks like "nox", "rm" and "lsat" may be skewed Gaussian distributions.
+
+```{r}
+# Box plots for each attribute
+par(mfrow=c(2,7))
+for(i in 1:13) {
+boxplot(dataset[,i], main=names(dataset)[i])
+}
+```
+
+This helps point out the skew in many distributions so much so that data looks like outliers.
+
+### 3.2 Multi modal Data Visualization
+
+Let’s look at some visualizations of the interactions between variables
+
+```{r}
+
+# scatterplot matrix
+pairs(dataset[,1:13])
+```
+
+We can see that some of the higher correlated attributes do show good structure in their relationship.
+
+```{r}
+
+# Input variables correlation plot
+correlations <- cor(dataset[,1:13])
+corrplot(correlations, method="circle")
+```
+
+The larger darker blue dots confirm the positively correlated attributes. We can also see some larger darker red dots that suggest some negatively correlated attributes.
+
+```{r}
+
+#Density plot of the target variable(medv)
+
+dataset%>% 
+  ggplot(aes(medv)) +
+  stat_density() + 
+  theme_bw()
+shapiro.test(dataset$medv)
+
+```
+
+The density plot of the target variable seems normally distributed with some outlier but we use Shapiro test to make sure whether really it is normally distributed so that we do not need further Box-Cox transformation.
+
+```{r}
+#Shapiro test to check normality of the target variable
+
+shapiro.test(dataset$medv)
+```
+As we can see The p-value is less than 0.05. Hence, the distribution of the given data is different from normal distribution significantly. Hence, we need to implement Box-Cox transformation for better accuracy.
+
+```{r}
+
+# The correlation between target variable and input features 
+corrplot(cor(dataset))
+```
+
+As we can see, it describes how median value of homes in Boston varies with the different features.
+
+## 4. Data Division
+
+```{r}
+
+# Split out  dataset into training and testing
+# create a list of 80% of the rows in the original dataset we can use for training
+
+set.seed(1)
+
+trainIndex <- caret::createDataPartition(dataset$medv, p=0.80, list=FALSE)
+
+# select 20% of the data for validation
+
+testing <- dataset[-trainIndex,]
+# use the remaining 80% of data to training and testing the models
+
+training <- dataset[trainIndex,]
+```
+
+We split the dataset into training and testing sets. We train the model with 80% of the samples and test with the remaining 20%. 
+
+## 5.Cross-Validation
+
+```{r}
+
+# defining training control as  repeated cross-validation and value of K is 10 and repetition is 3 times
+
+trainCrl <- caret::trainControl(method="repeatedcv", number=10, repeats=3)
+metric<-"RMSE"
+```
+
+We can see 10-fold cross validation (each fold will be about 360 instances for training and 40 for test) with 3 repeats.
+
+
+## 6. Modeling
+
+Training the model by assigning medv column as target variable and rest other column as independent variable.Since the data has differing units of measure so we need to standardize it for better evaluation and comparison of each algorithm.
+
+### 6.1. Linear Regression 
+
+```{r}
+
+#Standardize the dataset
+# Analysis of Linear Regression
+
+set.seed(1)
+
+fit.lm <- train(medv~., data=training, method="lm", metric=metric, preProc=c("center","scale"), trControl=trainCrl)
+```
+
+### 6.2. Generalized Linear Regression 
+
+```{r}
+
+#Standardize the dataset
+# Analysis of Generalized Linear Regression
+
+set.seed(1)
+
+fit.glm <- train(medv~., data=training, method="glm", metric=metric, preProc=c("center","scale"), trControl=trainCrl)
+```
+
+```{r}
+
+#Comparing the above two algorithms
+
+results <- resamples(list(LR=fit.lm, GLR=fit.glm))
+summary(results)
+dotplot(results)
+```
+
+It looks like both linear model and generalized linear model have the same MAE,RMSE and Rsquared values.  
+
+## 7. Feature Selection
+
+In this step we will remove the highly correlated attributes and see what effect that has on the evaluation metrics. We can find and remove the highly correlated attributes using the findCorrelation() function from the caret package as follows:
+
+```{r}
+
+# remove correlated attributes
+# find attributes that are highly corrected
+
+# setting seed to generate a reproducible random sampling
+set.seed(1)
+
+cutoff <- 0.70
+correlations <- cor(dataset[,1:13])
+highlyCorrelated <- findCorrelation(correlations, cutoff=cutoff)
+for (value in highlyCorrelated) {
+print(names(dataset)[value])
+} 
+#create a new dataset without highly corrected features
+
+datasetFeatures <- dataset[,-highlyCorrelated]
+
+```
+
+We can see that we have dropped 4 attributes: "indus", "nox", "tax"" and "dis".
+
+### 7.1. Linear Regression of selected features
+
+```{r}
+
+#Standardize the dataset
+# Analysis of Linear Regression
+
+set.seed(1)
+
+fit.lm <- train(medv~., data=datasetFeatures, method="lm", metric=metric, preProc=c("center","scale"), trControl=trainCrl)
+```
+
+### 7.2. Generalized Linear Regression of selected features
+
+```{r}
+
+#Standardize the dataset
+# Analysis of Generalized Linear Regression
+
+set.seed(1)
+
+fit.glm <- train(medv~., data=datasetFeatures, method="glm", metric=metric, preProc=c("center","scale"), trControl=trainCrl)
+```
+
+```{r}
+
+#Comparing the above two algorithms
+
+results <- resamples(list(LR=fit.lm, GLR=fit.glm))
+summary(results)
+dotplot(results)
+```
+
+Comparing this result with the former one, we can say that the feature selected model made the RMSE worse .This implies that, the correlated attributes we removed are contributing to the accuracy of the models.
+
+## 8. Modeling using Box-Cox Transformation
+
+In the visualization section, we observe that some of the attributes have a skew and others perhaps have an exponential distribution.Let’s try using this transform to rescale the original data and evaluate the effect on the same algorithms.
+
+### 8.1. Linear Regression 
+
+```{r}
+
+#Standardize the dataset
+#Box-Cox transformation
+# Analysis of Linear Regression
+
+set.seed(1)
+
+fit.lm <- train(medv~., data=training, method="lm", metric=metric, preProc=c("center","scale","BoxCox"), trControl=trainCrl)
+```
+
+### 8.2. Generalized Linear Regression 
+
+```{r}
+#Standardize the dataset
+#Box-Cox transformation
+# Analysis of Generalized Linear Regression
+
+set.seed(1)
+
+fit.glm <- train(medv~., data=training, method="glm",metric=metric, preProc=c("center","scale","BoxCox"), trControl=trainCrl)
+```
+
+```{r}
+
+#Comparing the above two algorithms
+
+transformResults <- resamples(list(LR=fit.lm, GLR=fit.glm))
+summary(transformResults)
+dotplot(transformResults)
+```
+
+The Box-Cox transformed model indeed decrease both MAE, RMSE and increased the Rsquared compared with the first one.
+
+## 9. Boosting and Bagging techniques
+
+### 9.1. Random Forest 
+
+```{r}
+# Random Forest method
+set.seed(1)
+fit.rf <- train(medv~., data=training, method="rf", metric=metric, preProc=c("BoxCox"), trControl=trainCrl)
+```
+
+### 9.2. Gradient Boosting
+
+```{r}
+
+# Gradient boosting method
+
+set.seed(1)
+fit.gbm <- train(medv~., data=training, method="gbm", metric=metric, preProc=c("BoxCox"),trControl=trainCrl, verbose=FALSE)
+# Compare algorithms
+ensembleResults <- resamples(list(RF=fit.rf, GBM=fit.gbm))
+summary(ensembleResults)
+dotplot(ensembleResults)
+```
+
+We can see that the random forest method is more accurate than gradient boosting method both in terms of RMSE and Rsquared.
+
+### 9.3. Tuning of Random Forest
+
+```{r}
+# look at parameters used for random forest tuning
+print(fit.rf)
+```
+
+Let’s use a grid search to tune around those values.
+
+```{r}
+#Create control function for training with 10 folds and keep 3 folds for training. search method is grid.
+
+control <- trainControl(method='repeatedcv',number=10, repeats=3, 
+                        search='grid')
+metric <- "RMSE"
+
+set.seed(1)
+
+#create tunegrid with 7 values from 1:7 for mtry to tunning model. 
+
+grid <- expand.grid(.mtry = (1:7))
+tune.rf <- train(medv~., data=training, method="rf", metric=metric,preProc=c("BoxCox"), tuneGrid=grid, trControl=control)
+print(tune.rf)
+plot(tune.rf)
+```
+
+We can see that we have achieved a more accurate model using grid search tuning of random forest.
+
+## 10. Predicting the target variable
+
+```{r}
+
+# transform the training dataset using Box-Cox transform
+
+set.seed(1)
+
+x <- training[,1:13]
+y <- training[,14]
+preproc <- preProcess(x, method=c("BoxCox"))
+transX <- predict(preproc, x)
+
+# train the final model
+finalModel <- randomForest(x=transX, y=y, mtry=5)
+summary(finalModel)
+
+# transform the testing dataset using Box-Cox transform
+set.seed(1)
+valX <- testing[,1:13]
+trans_valX <- predict(preproc, valX)
+valY <- testing[,14]
+
+# use final model to make predictions on the testing dataset
+
+predictions <- predict(finalModel, newdata=trans_valX)
+
+# computing model performance metrics
+rmse <- RMSE(predictions, valY)
+r2 <- R2(predictions, valY)
+mae<-MAE(predictions, valY)
+
+print(rmse)
+print(r2)
+print(mae)
+```
+
+We can see that the predicted RMSE on this unseen data is 2.548134,the predicted Rsquared on this unseen data is 93.54489, and the predicted MAE is also 1.75896.From the estimated results we can concluded that the model is perfectly trained.
+
+## 11. Artificial Neural network
+
+Normalize the dataset before training a neural network.
+
+```{r}
+#Preprocessing the dataset
+#Normalization
+
+maxs <- apply(dataset, 2, max)
+mins <- apply(dataset, 2, min)
+scaled <- as.data.frame(scale(dataset,
+                              center = mins,
+                              scale = maxs - mins))
+trainNN<- scaled[trainIndex, ]
+testNN<- scaled[-trainIndex, ]
+
+```
+
+After normalizing and splitting the dataset into x-training  and y-training we can train the model as follows:
+
+```{r}
+#Train the model
+model <- neuralnet(medv~crim+zn+indus+chas+nox+rm+age+dis+rad+tax+ptratio+b+lstat,
+               data = trainNN,
+               hidden = c(12,7),
+               linear.output = T,rep=1)
+    
+# Plotting the graph
+plot(model,col.hidden = 'darkred',     
+col.hidden.synapse = 'darkgreen',
+     show.weights = F,
+     information = F,
+     fill = 'lightblue')
+```
+
+After training the model using three hidden layers which is 10, 5 and 3 neurons respectively we can implement the testing data to analysis the performance of the model as follows: 
+
+```{r}
+#Predicting the model
+model_pre <-neuralnet::compute(model, testNN[,1:13])
+```
+
+To find the true prediction of the model we have to undo the scaling operation we have done earlier as follows:
+
+```{r}
+#Model true Prediction
+# we were subtracting from the center value and then dividing by that scale value to perform our normalization operation.
+# So for true.predictions, we are inverting this.
+
+True.pred <-(model_pre$net.result) * 
+        (max(dataset$medv) - min(dataset$medv)) + min(dataset$medv)
+
+#convert the test data mean squared error
+
+test.r <- (testNN$medv) * max(dataset$medv) - min(dataset$medv) + min(dataset$medv)
+MSE_NN <- sum((test.r - True.pred)^2)/nrow(testNN)
+
+error.df <- data.frame(test.r, True.pred)
+head(error.df)
+ggplot(error.df, aes(x = test.r, y = True.pred)) + geom_point() + stat_smooth()
+MSE_NN
+
+```
+
+As we can see from the graph a perfect prediction would be straight line...though overall, our graph does not look too bad.
+All I did was normalizing the data and treated neural net as some kind of black box.
+
+##Deep Neural Network
+
+```{r}
+
+set.seed(1)
+library(keras)
+
+y_training <- trainNN[,14]
+x_training <-trainNN[,1:13]
+y_testing <- testNN[,14]
+x_testing <-testNN[,1:13]
+
+# Define the model
+
+model <- keras_model_sequential() 
+model %>% 
+  layer_dense(units = 32, activation = "relu", input_shape = c(13)) %>% 
+  layer_dense(units = 16, activation = "relu") %>% 
+  layer_dense(units = 1)
+
+# Compile the model
+
+model %>% compile(loss = 'mae',
+  optimizer = "adam", metrics = 'mae')
+
+# Fit the model on the training data
+
+model %>% fit(x_training, y_training,
+  epochs = 100, batch_size = 32,
+  validation_split = 0.1)
+
+#Prediction
+# Evaluate the model on the test data
+
+model %>% evaluate(x_testing, y_testing)
+pred <- model %>% predict(x_testing)
+
+#Scatter Plot Original vs Predicted
+
+plot(y_testing, pred) 
+```
+
+# Conclusion
+
+In this project numerous regression techniques such as Linear Regression, Generalized Linear Model, Random Forest and Gradient Boosting Models as well as artificial neural network model has been implemented to investigate the performance of each individual models over the given Boston housing dataset. Moreover, supposing to get better result feature selection, Box-Cox transformation as well as normalization has been analyzed. From the former regression methods which is Linear Regression, Generalized Linear Model, Random Forest and Gradient Boosting Models a better result has been got from Random Forest regression models. To get even better result somehow we tried to tune the Random forest model using grid search tuning method. AS a result, We get the predicted RMSE on this unseen data as 2.548134,the predicted Rsquared on this unseen data as 93.54489, and the predicted MAE is also 1.75896.From the estimated results we can concluded that the model is perfectly trained.
+Artificial Neural model has also been implemented and got fairly good result.
+  
