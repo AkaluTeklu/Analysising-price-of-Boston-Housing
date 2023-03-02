@@ -1,6 +1,6 @@
 ---
 title: "Predicting the Price of Boston Housing"
-author: "Akalu Desta Teklu $ Krishnaraaj Vellakinar"
+author: "Akalu Desta Teklu"
 date: "2022-12-28"
 output: html_document
 ---
